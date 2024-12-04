@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapa con Descarga de Geometrías</title>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+        }
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+        .legend {
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+            font-size: 14px;
+            line-height: 18px;
+            color: #555;
+            position: absolute;
+            bottom: 20px;
+            right: 10px;
+            z-index: 1000;
+        }
+        .legend i {
+            width: 18px;
+            height: 18px;
+            float: left;
+            margin-right: 8px;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <!-- Archivos de datos en formato GeoJSON -->
+    <script src="primeraparte.js"></script>
+    <script src="segundaparte.js"></script>
+    <script src="terceraparte.js"></script>
+    <script src="cuartaparte.js"></script>
+    <script src="ugas.js"></script>
+
+    <script>
+               const map = L.map('map', {
+            center: [20.45, -98.7624],
+            zoom: 8,
+            zoomControl: true,
+            attributionControl: true
+        });
+
+        
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 19
+        }).addTo(map);
+
+        // Función para asignar colores según rango
+        function getColor(value) {
+            return value > 4 ? '#F44336' :  // Muy bueno
+                   value > 3 ? '#FFC107' :  // Bueno
+                   value > 2 ? '#CDDC39' :  // Regular
+                   value > 1 ? '#8BC34A' :  // Malo
+                               '#4CAF50';   // Muy malo
+        }
+
+     
+        function styleByColumn(feature, column) {
+            const value = feature.properties[column];
+            return {
+                weight: 1.5,
+                color: '#333',
+                fillColor: getColor(value),
+                fillOpacity: 0.8,
+                interactive: true
+            };
+        }
+
+       
+        function downloadFeatureAsCSV(feature) {
+            const properties = feature.properties;
+            const csvContent = Object.entries(properties)
+                .map(([key, value]) => `${key},${value}`)
+                .join("\n");
+            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = `${properties.Nombre_Mun || 'geometry'}_data.csv`;
+            link.style.display = "none";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+               function onEachFeature(feature, layer) {
+            layer.on('click', function () {
+                const nombre = feature.properties.Nombre_Mun || 'Geometría';
+                if (confirm(`¿Deseas descargar los datos de "${nombre}" en formato CSV?`)) {
+                    downloadFeatureAsCSV(feature);
+                }
+            });
+        }
+
+     
+        function addLayer(data, label, column) {
+            const layer = L.geoJson(data, {
+                style: function (feature) {
+                    return styleByColumn(feature, column);
+                },
+                onEachFeature: onEachFeature // Agregar interacción a cada geometría
+            }).addTo(map);
+            layersControl.addOverlay(layer, label);
+        }
+
+        // Control 
+        const layersControl = L.control.layers(null, null, { collapsed: false }).addTo(map);
+
+   
+        addLayer(primeraparte, 'Condiciones', 'Calificaci');
+        addLayer(segundaparte, 'Edafología', 'degrado no');
+        addLayer(terceraparte, 'Precipitación', 'valor');
+        addLayer(cuartaparte, 'Cambio de Cobertura', 'Normalizad');
+        addLayer(ugas, 'UGAS', 'SUM_Valor');
+
+        // Leyenda
+        const legend = L.control({ position: 'bottomright' });
+        legend.onAdd = function () {
+            const div = L.DomUtil.create('div', 'legend');
+            const grades = [1, 2, 3, 4, 5];
+            const labels = ['Mejor Condición', 'Buena Condición', 'Regular', 'Mala Condición', 'Peor Condición'];
+
+            for (let i = 0; i < grades.length; i++) {
+                div.innerHTML += `<i style="background:${getColor(grades[i])}"></i> ${labels[i]}<br>`;
+            }
+            return div;
+        };
+        legend.addTo(map);
+    </script>
+</body>
+</html>
